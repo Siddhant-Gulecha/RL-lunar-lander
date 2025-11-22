@@ -5,24 +5,32 @@ import numpy as np
 
 
 # ----------------------------
-# Dueling Model (Must match training)
+# Dueling Model (Must match STABILIZED training script)
 # ----------------------------
 class DuelingDQN(nn.Module):
     def __init__(self, input_dim, output_dim):
         super(DuelingDQN, self).__init__()
+
+        # Updated Feature Layer (2 layers now)
         self.feature_layer = nn.Sequential(
             nn.Linear(input_dim, 256),
+            nn.ReLU(),
+            nn.Linear(256, 256),  # Added layer
             nn.ReLU()
         )
+
+        # Updated Value Stream (Reduced to 128)
         self.value_stream = nn.Sequential(
-            nn.Linear(256, 256),
+            nn.Linear(256, 128),
             nn.ReLU(),
-            nn.Linear(256, 1)
+            nn.Linear(128, 1)
         )
+
+        # Updated Advantage Stream (Reduced to 128)
         self.advantage_stream = nn.Sequential(
-            nn.Linear(256, 256),
+            nn.Linear(256, 128),
             nn.ReLU(),
-            nn.Linear(256, output_dim)
+            nn.Linear(128, output_dim)
         )
 
     def forward(self, x):
@@ -50,9 +58,13 @@ def test():
 
     try:
         policy_net.load_state_dict(torch.load(MODEL_PATH, map_location=DEVICE))
-        print(f"Loaded model from {MODEL_PATH}")
+        print(f"Successfully loaded model from {MODEL_PATH}")
     except FileNotFoundError:
-        print(f"Error: {MODEL_PATH} not found. Train first.")
+        print(f"Error: Could not find model file '{MODEL_PATH}'. Train first.")
+        return
+    except RuntimeError as e:
+        print(f"Error loading model weights: {e}")
+        print("Make sure your training script architecture matches this test script exactly.")
         return
 
     policy_net.eval()

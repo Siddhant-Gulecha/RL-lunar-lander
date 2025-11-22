@@ -10,7 +10,7 @@ from collections import deque
 # Config
 # ----------------------------
 ENV_NAME = "LunarLanderContinuous-v3"
-EPISODES = 1000
+EPISODES = 2000
 ACTOR_LR = 1e-4
 CRITIC_LR = 1e-3
 GAMMA = 0.99

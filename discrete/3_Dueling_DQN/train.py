@@ -7,17 +7,17 @@ import torch.optim as optim
 from collections import deque
 
 # ----------------------------
-# Config
+# Config (Stabilized)
 # ----------------------------
 ENV_NAME = "LunarLander-v3"
 EPISODES = 1000
-LR = 5e-4
+LR = 1e-4  # Reduced LR for stability
 GAMMA = 0.99
-BATCH_SIZE = 64
+BATCH_SIZE = 128  # Increased batch size for smoother gradients
 REPLAY_SIZE = 100000
 WARMUP = 1000
-TAU = 0.005
-GRAD_CLIP = 1.0
+TAU = 0.001  # Slower soft update
+GRAD_CLIP = 0.5  # Tighter gradient clipping
 EPS_START = 1.0
 EPS_END = 0.01
 EPS_DECAY = 0.995
@@ -56,32 +56,29 @@ class DuelingDQN(nn.Module):
     def __init__(self, input_dim, output_dim):
         super(DuelingDQN, self).__init__()
 
-        # Common feature extraction layer
         self.feature_layer = nn.Sequential(
             nn.Linear(input_dim, 256),
+            nn.ReLU(),
+            nn.Linear(256, 256),  # Added extra layer for capacity
             nn.ReLU()
         )
 
-        # Value Stream (Estimates V(s))
         self.value_stream = nn.Sequential(
-            nn.Linear(256, 256),
+            nn.Linear(256, 128),
             nn.ReLU(),
-            nn.Linear(256, 1)
+            nn.Linear(128, 1)
         )
 
-        # Advantage Stream (Estimates A(s, a))
         self.advantage_stream = nn.Sequential(
-            nn.Linear(256, 256),
+            nn.Linear(256, 128),
             nn.ReLU(),
-            nn.Linear(256, output_dim)
+            nn.Linear(128, output_dim)
         )
 
     def forward(self, x):
         features = self.feature_layer(x)
         values = self.value_stream(features)
         advantages = self.advantage_stream(features)
-
-        # Aggregation Layer: Q(s,a) = V(s) + (A(s,a) - mean(A(s,a)))
         qvals = values + (advantages - advantages.mean(dim=1, keepdim=True))
         return qvals
 
@@ -129,7 +126,7 @@ def train():
     training_scores = []
     best_score = -1e9
 
-    print(f"Starting Dueling DQN training on {DEVICE}...")
+    print(f"Starting Stabilized Dueling DQN training on {DEVICE}...")
 
     for ep in range(1, EPISODES + 1):
         s, _ = env.reset()
@@ -154,7 +151,6 @@ def train():
             if len(replay) >= WARMUP:
                 bs, ba, br, bns, bd = replay.sample(BATCH_SIZE)
 
-                # We use Double DQN update rule here as it's standard with Dueling
                 with torch.no_grad():
                     next_actions = policy_net(bns).argmax(1).unsqueeze(1)
                     next_q = target_net(bns).gather(1, next_actions).squeeze(1)
@@ -168,7 +164,6 @@ def train():
                 nn.utils.clip_grad_norm_(policy_net.parameters(), GRAD_CLIP)
                 optimizer.step()
 
-                # Soft update
                 for tp, pp in zip(target_net.parameters(), policy_net.parameters()):
                     tp.data.copy_(tp.data * (1 - TAU) + pp.data * TAU)
 
@@ -178,7 +173,7 @@ def train():
         if ep % 20 == 0:
             avg_eval = evaluate(policy_net, env)
             print(
-                f"Ep {ep:4d} | Train Avg: {np.mean(training_scores[-10:]):7.1f} | Eval: {avg_eval:7.1f} | Eps: {epsilon:.3f}")
+                f"Ep {ep:4d} | Train Avg (last 10): {np.mean(training_scores[-10:]):7.1f} | Eval: {avg_eval:7.1f} | Eps: {epsilon:.3f}")
             if avg_eval > best_score and avg_eval > 200:
                 best_score = avg_eval
                 torch.save(policy_net.state_dict(), "dueling_dqn_lunar_best.pth")
